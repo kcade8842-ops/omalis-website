@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Request deletion of your Omalis account and associated data.">
+  <title>Delete your Omalis account</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7faff;
+      color: #17243a;
+      line-height: 1.6;
+    }
+    header, footer { background: #fff; padding: 20px 8%; }
+    header { border-bottom: 1px solid #e5eaf2; }
+    footer { border-top: 1px solid #e5eaf2; text-align: center; }
+    .brand { color: #0091ff; font-size: 26px; font-weight: 800; text-decoration: none; }
+    main { max-width: 680px; margin: 48px auto; padding: 0 20px; }
+    .card {
+      background: #fff;
+      border: 1px solid #e5eaf2;
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 8px 30px rgba(23, 36, 58, .05);
+    }
+    h1 { line-height: 1.2; }
+    label { display: block; font-weight: 700; margin: 18px 0 6px; }
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #bdc9d8;
+      border-radius: 8px;
+      font: inherit;
+    }
+    button {
+      margin-top: 20px;
+      border: 0;
+      border-radius: 8px;
+      padding: 12px 18px;
+      background: #c62828;
+      color: white;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .65; cursor: wait; }
+    .notice { background: #f3f7fc; padding: 14px; border-radius: 8px; }
+    #result { margin-top: 18px; }
+    #result[role="alert"] { color: #a61b1b; }
+    a { color: #0078d4; }
+    @media (max-width: 520px) { .card { padding: 20px; } }
+  </style>
+</head>
+<body>
+  <header><a class="brand" href="index.html">omalīs</a></header>
+  <main>
+    <section class="card" aria-labelledby="page-title">
+      <h1 id="page-title">Request account deletion</h1>
+      <p>Use the email address and password for your Omalis account to verify your identity and submit a deletion request.</p>
+      <p class="notice">After you submit the request, there is a 7-day waiting period. You can cancel it from the Omalis app before deletion begins. When processing completes, your account and associated data will be deleted. Messages you sent to other people may be retained with your sender identity shown as “Deleted account.”</p>
+      <form id="deletion-form">
+        <label for="email">Account email</label>
+        <input id="email" name="email" type="email" autocomplete="username" required>
+        <label for="password">Account password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <button id="submit-button" type="submit">Verify and request deletion</button>
+      </form>
+      <p id="result" aria-live="polite"></p>
+      <p><a href="index.html">Return to Omalis website</a></p>
+    </section>
+  </main>
+  <footer>Omalis · Somali creativity, connected</footer>
+
+  <script type="module">
+    import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+    const supabase = createClient(
+      "https://kfemjqyridvlyoflcztr.supabase.co",
+      "sb_publishable_XrogTVI4SR30dME-ITRXjA_Ep6rwd18",
+    );
+
+    const form = document.getElementById("deletion-form");
+    const button = document.getElementById("submit-button");
+    const result = document.getElementById("result");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      result.removeAttribute("role");
+      result.textContent = "Verifying your account and submitting the request…";
+
+      try {
+        const email = document.getElementById("email").value.trim();
+        const password = document.getElementById("password").value;
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInError) throw new Error("The email or password could not be verified.");
+
+        const { data, error } = await supabase.functions.invoke("delete-account", {
+          body: {},
+        });
+        if (error) throw new Error("We could not submit the request. Please try again or contact Omalis support.");
+        if (!data || data.success !== true || data.stage !== "pending") {
+          throw new Error(data?.message || "The server did not confirm the deletion request.");
+        }
+
+        const scheduledAt = Date.parse(data.scheduled_deletion_at || "");
+        if (!Number.isFinite(scheduledAt)) {
+          throw new Error("The request was received, but its scheduled date could not be confirmed. Please contact Omalis support before submitting again.");
+        }
+
+        await supabase.auth.signOut();
+        form.hidden = true;
+        result.textContent = `Your deletion request is pending. Scheduled deletion date: ${new Date(scheduledAt).toLocaleString()}. You can cancel it in the Omalis app before processing begins.`;
+      } catch (error) {
+        result.setAttribute("role", "alert");
+        result.textContent = error instanceof Error ? error.message : "Something went wrong. Please try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
