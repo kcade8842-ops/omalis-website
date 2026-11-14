@@ -50,6 +50,7 @@
     .notice { background: #f3f7fc; padding: 14px; border-radius: 8px; }
     #result { margin-top: 18px; }
     #result[role="alert"] { color: #a61b1b; }
+    #countdown { font-size: 1.2rem; font-weight: 700; color: #a61b1b; }
     a { color: #0078d4; }
     @media (max-width: 520px) { .card { padding: 20px; } }
   </style>
@@ -69,6 +70,7 @@
         <button id="submit-button" type="submit">Verify and request deletion</button>
       </form>
       <p id="result" aria-live="polite"></p>
+      <p id="countdown" aria-live="off" hidden></p>
       <p><a href="index.html">Return to Omalis website</a></p>
     </section>
   </main>
@@ -85,6 +87,34 @@
     const form = document.getElementById("deletion-form");
     const button = document.getElementById("submit-button");
     const result = document.getElementById("result");
+    const countdown = document.getElementById("countdown");
+    let countdownTimer;
+
+    function startCountdown(deadline) {
+      countdown.hidden = false;
+
+      const updateCountdown = () => {
+        const remainingSeconds = Math.max(
+          0,
+          Math.floor((deadline - Date.now()) / 1000),
+        );
+        const days = Math.floor(remainingSeconds / 86400);
+        const hours = Math.floor((remainingSeconds % 86400) / 3600);
+        const minutes = Math.floor((remainingSeconds % 3600) / 60);
+        const seconds = remainingSeconds % 60;
+
+        countdown.textContent = remainingSeconds === 0
+          ? "The waiting period has ended. Deletion processing may begin."
+          : `Time remaining: ${days}d ${hours}h ${minutes}m ${seconds}s`;
+
+        if (remainingSeconds === 0) {
+          window.clearInterval(countdownTimer);
+        }
+      };
+
+      updateCountdown();
+      countdownTimer = window.setInterval(updateCountdown, 1000);
+    }
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -117,6 +147,7 @@
         await supabase.auth.signOut();
         form.hidden = true;
         result.textContent = `Your deletion request is pending. Scheduled deletion date: ${new Date(scheduledAt).toLocaleString()}. You can cancel it in the Omalis app before processing begins.`;
+        startCountdown(scheduledAt);
       } catch (error) {
         result.setAttribute("role", "alert");
         result.textContent = error instanceof Error ? error.message : "Something went wrong. Please try again.";
